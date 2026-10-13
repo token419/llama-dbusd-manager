@@ -1,0 +1,87 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: llama-dbusd-manager\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-13 14:23-0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: extension.js:76
+msgid "Preferences"
+msgstr ""
+
+#: extension.js:269
+msgid "D-Bus Server Offline"
+msgstr ""
+
+#: extension.js:274
+msgid "Server Status: Online"
+msgstr ""
+
+#: extension.js:275
+msgid "Server Status: Offline"
+msgstr ""
+
+#: extension.js:306
+msgid "LOADED MODELS"
+msgstr ""
+
+#: extension.js:329
+msgid "Unload model"
+msgstr ""
+
+#: extension.js:346
+msgid "Failed to unload model"
+msgstr ""
+
+#: extension.js:371
+msgid "Open chat in browser"
+msgstr ""
+
+#: extension.js:394
+msgid "AVAILABLE MODELS"
+msgstr ""
+
+#: extension.js:407
+msgid ""
+"No Available Models Found\n"
+"Verify llama.cpp paths or check download logs."
+msgstr ""
+
+#: extension.js:438
+msgid "Load model"
+msgstr ""
+
+#: extension.js:456
+msgid "Failed to load model"
+msgstr ""
+
+#: prefs.js:8
+msgid "General"
+msgstr ""
+
+#: prefs.js:14
+msgid "Connection Configuration"
+msgstr ""
+
+#: prefs.js:15
+msgid ""
+"Configure how the desktop extension communicates with your local environment."
+msgstr ""
+
+#: prefs.js:20
+msgid "Llama Server URL"
+msgstr ""
+
+#: schemas/org.gnome.shell.extensions.llama-dbusd-manager.gschema.xml:6
+msgid "Llama.cpp Server URL"
+msgstr ""
+
+#: schemas/org.gnome.shell.extensions.llama-dbusd-manager.gschema.xml:7
+msgid "The web address that opens when the Open Chat button is clicked."
+msgstr ""

@@ -1,0 +1,72 @@
+/* Tighter padding and native sizing for text containers */
+.llama-menu-layout {
+    min-width: 280px;
+    padding: 6px;
+}
+
+.llama-model-item:insensitive {
+    color: inherit;
+}
+
+.llama-menu-title {
+    font-weight: bold;
+    padding: 0;
+}
+
+.llama-status-header {
+    padding: 4px 6px;
+    margin-bottom: 4px;
+    margin-left: 6px;
+}
+
+.llama-status-icon {
+    margin-right: 8px;
+}
+
+.llama-section-header {
+    font-weight: bold;
+    padding: 10px 8px 4px 8px;
+    font-size: 0.85em;
+}
+
+.llama-available-scroll-view {
+    max-height: 320px;
+}
+
+.llama-loaded-model-label {
+    font-weight: bold;
+    padding-left: 6px;
+}
+
+.llama-available-model-label {
+    padding-left: 6px;
+}
+
+.llama-empty-message {
+    opacity: 0.5;
+    padding: 12px;
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+/* Status dots */
+.llama-status-online { color: #2ec27e; }
+.llama-status-offline { color: #e01b24; }
+.llama-status-dbus-offline { color: #ff7900; }
+
+/* Grid columns layout adjustments */
+.llama-model-item {
+    padding: 4px 6px;
+    spacing: 6px;
+}
+
+/* Custom button overrides to match native header style scales */
+.llama-menu-layout .llama-icon-btn {
+    padding: 3px 6px;
+    border-radius: 6px;
+}
+
+/* Enforce the small scale on our media elements */
+.llama-menu-layout .llama-small-icon {
+    icon-size: 14px;
+}

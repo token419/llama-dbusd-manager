@@ -1,0 +1,18 @@
+{
+  "name": "llama-dbusd Manager",
+  "description": "Manage and switch local llama.cpp models directly from the GNOME top bar. Requires the companion llama-dbusd daemon running on the host system.",
+  "url": "https://github.com/token419/llama-dbusd-manager",
+  "uuid": "llama-dbusd-manager@token419.github.com",
+  "gettext-domain": "llama-dbusd-manager",
+  "settings-schema": "org.gnome.shell.extensions.llama-dbusd-manager",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "version": 1
+}

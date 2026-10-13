@@ -1,0 +1,111 @@
+name: CI
+
+'on':
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate & Lint (Gatekeeper)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnome-shell \
+            libglib2.0-bin \
+            gettext \
+            jq
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check extension.js
+          node --check prefs.js
+
+      - name: Validate GSettings XML Schema
+        run: |
+          glib-compile-schemas --strict --dry-run schemas/
+
+      - name: Validate Metadata JSON
+        run: |
+          jq . metadata.json
+
+      - name: Validate Translation Template
+        run: |
+          msgfmt -c --check-header -o /dev/null po/llama-dbusd-manager.pot
+
+      - name: Test Extension Packaging (Dry Run)
+        run: |
+          gnome-extensions pack --extra-source=icons --force
+          test -f llama-dbusd-manager@token419.github.com.shell-extension.zip
+          unzip -l llama-dbusd-manager@token419.github.com.shell-extension.zip | grep -F "icons/llama-ai-symbolic.svg"
+          rm -f llama-dbusd-manager@token419.github.com.shell-extension.zip
+
+  release:
+    name: GitHub Release
+    needs: validate
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gnome-shell \
+            libglib2.0-bin \
+            gettext
+
+      - name: Package extension bundle
+        run: |
+          set -euo pipefail
+
+          # Package extension with custom icons included
+          gnome-extensions pack --extra-source=icons --force
+
+          ZIP_NAME="llama-dbusd-manager@token419.github.com.shell-extension.zip"
+
+          mkdir -p release-assets
+          cp "$ZIP_NAME" release-assets/
+
+          cd release-assets
+          sha256sum "$ZIP_NAME" > SHA256SUMS.txt
+          ls -lh
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: |
+            release-assets/*.shell-extension.zip
+            release-assets/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

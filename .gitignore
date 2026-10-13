@@ -1,0 +1,12 @@
+schemas/gschemas.compiled
+locale/
+*.mo
+po/*.po~
+po/*.mo
+*.shell-extension.zip
+build/
+_build/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
