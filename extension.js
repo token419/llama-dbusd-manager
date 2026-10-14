@@ -260,7 +260,7 @@ export default class LlamaDbusExtension extends Extension {
                 'com.github.token419.LlamaDbusd',
                 '/',
                 (proxy, error) => {
-                    if (this._cancellable?.is_cancelled() || !proxy)
+                    if (!this._cancellable || this._cancellable.is_cancelled() || !proxy)
                         return;
 
                     if (error) {
@@ -308,7 +308,7 @@ export default class LlamaDbusExtension extends Extension {
             100,
             () => {
                 this._modelsChangedTimeoutId = null;
-                if (this._cancellable?.is_cancelled() || !this._dbusProxy)
+                if (!this._cancellable || this._cancellable.is_cancelled() || !this._dbusProxy)
                     return GLib.SOURCE_REMOVE;
 
                 this._checkLifecycleState();
@@ -318,7 +318,7 @@ export default class LlamaDbusExtension extends Extension {
     }
 
     _checkLifecycleState() {
-        if (this._cancellable?.is_cancelled() || !this._dbusProxy)
+        if (!this._cancellable || this._cancellable.is_cancelled() || !this._dbusProxy)
             return;
 
         if (!this._dbusProxy.g_name_owner) {
@@ -401,7 +401,7 @@ export default class LlamaDbusExtension extends Extension {
             ejectIcon.icon_name = 'process-working-symbolic';
 
             this._dbusProxy?.UnloadModelRemote(m, this._cancellable, (_result, error) => {
-                if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
+                if (!this._cancellable || this._cancellable.is_cancelled() || !this._dbusProxy || !this._busyModels)
                     return;
 
                 this._busyModels.delete(m);
@@ -472,7 +472,7 @@ export default class LlamaDbusExtension extends Extension {
             playIcon.icon_name = 'process-working-symbolic';
 
             this._dbusProxy?.LoadModelRemote(m, this._cancellable, (_result, error) => {
-                if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
+                if (!this._cancellable || this._cancellable.is_cancelled() || !this._dbusProxy || !this._busyModels)
                     return;
 
                 this._busyModels.delete(m);
@@ -499,7 +499,7 @@ export default class LlamaDbusExtension extends Extension {
     }
 
     _updateUI(daemonOnline, llamaOnline, availableModels, loadedModels) {
-        if (this._cancellable?.is_cancelled() || !this._indicator || !this._loadedSection || !this._availableSection)
+        if (!this._cancellable || this._cancellable.is_cancelled() || !this._indicator || !this._loadedSection || !this._availableSection)
             return;
 
         const cleanLoaded = (Array.isArray(loadedModels) ? loadedModels : [])
