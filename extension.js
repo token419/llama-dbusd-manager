@@ -361,11 +361,12 @@ export default class LlamaDbusExtension extends Extension {
     }
 
     _handleFocusTransfer(removedItem, currentMap, fallbackActor) {
-        const focused = global.stage.get_key_focus();
-        if (!focused)
-            return;
-
-        const hadFocus = removedItem.row === focused || removedItem.row.contains(focused);
+        const hadFocus = Boolean(
+            removedItem.loadBtn?.has_key_focus() ||
+            removedItem.unloadBtn?.has_key_focus() ||
+            removedItem.chatBtn?.has_key_focus() ||
+            removedItem.row?.has_key_focus()
+        );
         if (!hadFocus)
             return;
 
