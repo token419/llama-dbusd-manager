@@ -142,16 +142,36 @@ export default class LlamaDbusExtension extends Extension {
             this._availableScrollView = null;
         }
 
+        if (this._availableSection) {
+            this._availableSection.destroy();
+            this._availableSection = null;
+        }
+
+        if (this._loadedSection) {
+            this._loadedSection.destroy();
+            this._loadedSection = null;
+        }
+
+        if (this._statusIcon) {
+            this._statusIcon.destroy();
+            this._statusIcon = null;
+        }
+
+        if (this._statusLabel) {
+            this._statusLabel.destroy();
+            this._statusLabel = null;
+        }
+
+        if (this._statusHeaderItem) {
+            this._statusHeaderItem.destroy();
+            this._statusHeaderItem = null;
+        }
+
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;
         }
 
-        this._statusHeaderItem = null;
-        this._statusIcon = null;
-        this._statusLabel = null;
-        this._loadedSection = null;
-        this._availableSection = null;
         this._settings = null;
 
         if (this._busyModels) {
