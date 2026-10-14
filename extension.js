@@ -27,6 +27,13 @@ const LlamaDbusInterface = `
   </interface>
 </node>`;
 
+function _logError(msg, err = null) {
+    if (err)
+        console.error(`[llama-dbusd-manager] ${msg}:`, err);
+    else
+        console.error(`[llama-dbusd-manager] ${msg}`);
+}
+
 export default class LlamaDbusExtension extends Extension {
     enable() {
         this._cancellable = new Gio.Cancellable();
@@ -193,7 +200,7 @@ export default class LlamaDbusExtension extends Extension {
                         return;
 
                     if (error) {
-                        console.error(`[llama-dbusd-manager] D-Bus proxy init failed: ${error.message}`);
+                        _logError(`D-Bus proxy init failed: ${error.message}`);
                         return;
                     }
 
@@ -220,7 +227,7 @@ export default class LlamaDbusExtension extends Extension {
                 this._cancellable
             );
         } catch (error) {
-            console.error('[llama-dbusd-manager] Failed to initialize D-Bus proxy:', error);
+            _logError('Failed to initialize D-Bus proxy', error);
             this._updateUI(false, false, [], []);
         }
     }
@@ -268,7 +275,7 @@ export default class LlamaDbusExtension extends Extension {
 
             this._updateUI(true, isLlamaOnline, availableModels, loadedModels);
         } catch (error) {
-            console.error(`[llama-dbusd-manager] Property synchronization exception: ${error}`);
+            _logError(`Property synchronization exception: ${error}`);
             this._updateUI(true, false, [], []);
         }
     }
@@ -362,7 +369,7 @@ export default class LlamaDbusExtension extends Extension {
 
                         this._busyModels.delete(m);
                         if (error) {
-                            console.error(`[llama-dbusd-manager] Failed to unload model ${m}:`, error);
+                            _logError(`Failed to unload model ${m}`, error);
                             Main.notifyError(this.gettext('Failed to unload model'), error.message);
                         }
                         this._checkLifecycleState();
@@ -472,7 +479,7 @@ export default class LlamaDbusExtension extends Extension {
 
                             this._busyModels.delete(m);
                             if (error) {
-                                console.error(`[llama-dbusd-manager] Failed to load model ${m}:`, error);
+                                _logError(`Failed to load model ${m}`, error);
                                 Main.notifyError(this.gettext('Failed to load model'), error.message);
                             }
                             this._checkLifecycleState();
@@ -521,11 +528,11 @@ export default class LlamaDbusExtension extends Extension {
                 try {
                     Gio.AppInfo.launch_default_for_uri_finish(res);
                 } catch (err) {
-                    console.error('[llama-dbusd-manager] Failed to launch chat URL:', err);
+                    _logError('Failed to launch chat URL', err);
                 }
             });
         } catch (err) {
-            console.error('[llama-dbusd-manager] Failed to initiate chat URL launch:', err);
+            _logError('Failed to initiate chat URL launch', err);
         }
     }
 }
