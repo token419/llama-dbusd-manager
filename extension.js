@@ -128,6 +128,7 @@ export default class LlamaDbusExtension extends Extension {
         this._availableSection.addMenuItem(this._availableEmptyItem);
 
         this._availableListSection = new PopupMenu.PopupMenuSection();
+        this._availableListSection._setParent(this._availableSection);
         this._availableScrollView = new St.ScrollView({
             style_class: 'llama-available-scroll-view',
             hscrollbar_policy: St.PolicyType.NEVER,
