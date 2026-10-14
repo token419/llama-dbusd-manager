@@ -127,10 +127,13 @@ export default class LlamaDbusExtension extends Extension {
         }));
         this._availableSection.addMenuItem(this._availableEmptyItem);
 
-        this._availableBox = new St.BoxLayout({
-            vertical: true,
-            x_expand: true,
-        });
+        const boxProps = { x_expand: true };
+        if (St.BoxLayout.find_property('orientation'))
+            boxProps.orientation = Clutter.Orientation.VERTICAL;
+        else
+            boxProps.vertical = true;
+
+        this._availableBox = new St.BoxLayout(boxProps);
 
         const availableScrollView = new St.ScrollView({
             style_class: 'llama-available-scroll-view',
