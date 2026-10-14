@@ -341,9 +341,9 @@ export default class LlamaDbusExtension extends Extension {
         }
 
         try {
-            const isLlamaOnline = Boolean(this._dbusProxy.IsOnline);
-            const rawAvailable = this._dbusProxy.AvailableModels;
-            const rawLoaded = this._dbusProxy.LoadedModels;
+            const isLlamaOnline = Boolean(this._dbusProxy?.IsOnline);
+            const rawAvailable = this._dbusProxy?.AvailableModels ?? [];
+            const rawLoaded = this._dbusProxy?.LoadedModels ?? [];
 
             const availableModels = Array.isArray(rawAvailable)
                 ? Array.from(rawAvailable).map(String)
