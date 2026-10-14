@@ -29,6 +29,10 @@
     font-size: 0.85em;
 }
 
+.llama-scroll-menu-item {
+    padding: 0;
+}
+
 .llama-available-scroll-view {
     max-height: 320px;
 }

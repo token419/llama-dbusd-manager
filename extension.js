@@ -94,11 +94,57 @@ export default class LlamaDbusExtension extends Extension {
         this._loadedSection = new PopupMenu.PopupMenuSection();
         this._indicator.menu.addMenuItem(this._loadedSection);
 
+        this._loadedTitleItem = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+        });
+        this._loadedTitleItem.add_child(new St.Label({
+            text: this.gettext('LOADED MODELS'),
+            style_class: 'llama-section-header',
+        }));
+        this._loadedSection.addMenuItem(this._loadedTitleItem);
+
         this._availableSection = new PopupMenu.PopupMenuSection();
         this._indicator.menu.addMenuItem(this._availableSection);
-        this._availableListSection = null;
-        this._availableScrollView = null;
 
+        this._availableTitleItem = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+        });
+        this._availableTitleItem.add_child(new St.Label({
+            text: this.gettext('AVAILABLE MODELS'),
+            style_class: 'llama-section-header',
+        }));
+        this._availableSection.addMenuItem(this._availableTitleItem);
+
+        this._availableEmptyItem = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+        });
+        this._availableEmptyItem.add_child(new St.Label({
+            text: this.gettext('No Available Models Found\nVerify llama.cpp paths or check download logs.'),
+            style_class: 'llama-empty-message',
+        }));
+        this._availableSection.addMenuItem(this._availableEmptyItem);
+
+        this._availableListSection = new PopupMenu.PopupMenuSection();
+        this._availableScrollView = new St.ScrollView({
+            style_class: 'llama-available-scroll-view',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+        });
+        this._availableScrollView.add_child(this._availableListSection.box);
+
+        this._availableScrollItem = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+            style_class: 'llama-scroll-menu-item',
+        });
+        this._availableScrollItem.add_child(this._availableScrollView);
+        this._availableSection.addMenuItem(this._availableScrollItem);
+
+        this._loadedRows = new Map();
+        this._availableRows = new Map();
         this._busyModels = new Set();
         this._dbusProxy = null;
         this._nameOwnerId = null;
@@ -139,6 +185,20 @@ export default class LlamaDbusExtension extends Extension {
             this._dbusProxy = null;
         }
 
+        if (this._availableRows) {
+            for (const item of this._availableRows.values())
+                item.row.destroy();
+            this._availableRows.clear();
+            this._availableRows = null;
+        }
+
+        if (this._loadedRows) {
+            for (const item of this._loadedRows.values())
+                item.row.destroy();
+            this._loadedRows.clear();
+            this._loadedRows = null;
+        }
+
         if (this._availableListSection) {
             this._availableListSection.destroy();
             this._availableListSection = null;
@@ -149,9 +209,29 @@ export default class LlamaDbusExtension extends Extension {
             this._availableScrollView = null;
         }
 
+        if (this._availableScrollItem) {
+            this._availableScrollItem.destroy();
+            this._availableScrollItem = null;
+        }
+
+        if (this._availableEmptyItem) {
+            this._availableEmptyItem.destroy();
+            this._availableEmptyItem = null;
+        }
+
+        if (this._availableTitleItem) {
+            this._availableTitleItem.destroy();
+            this._availableTitleItem = null;
+        }
+
         if (this._availableSection) {
             this._availableSection.destroy();
             this._availableSection = null;
+        }
+
+        if (this._loadedTitleItem) {
+            this._loadedTitleItem.destroy();
+            this._loadedTitleItem = null;
         }
 
         if (this._loadedSection) {
@@ -280,6 +360,157 @@ export default class LlamaDbusExtension extends Extension {
         }
     }
 
+    _handleFocusTransfer(removedItem, currentMap, fallbackActor) {
+        const focused = global.stage.get_key_focus();
+        if (!focused)
+            return;
+
+        const hadFocus = removedItem.row === focused || removedItem.row.contains(focused);
+        if (!hadFocus)
+            return;
+
+        const keys = Array.from(currentMap.keys());
+        const removedIndex = keys.indexOf(removedItem.name);
+        const remainingKeys = keys.filter(k => k !== removedItem.name);
+
+        if (remainingKeys.length > 0) {
+            const nextKey = remainingKeys[removedIndex] || remainingKeys[remainingKeys.length - 1];
+            const nextItem = currentMap.get(nextKey);
+            const focusTarget = nextItem?.loadBtn || nextItem?.unloadBtn;
+            if (focusTarget && focusTarget.can_focus) {
+                focusTarget.grab_key_focus();
+                return;
+            }
+        }
+
+        if (fallbackActor && fallbackActor.can_focus)
+            fallbackActor.grab_key_focus();
+    }
+
+    _createLoadedRow(m) {
+        const row = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+            style_class: 'llama-model-item',
+        });
+
+        const ejectIcon = new St.Icon({
+            icon_name: 'media-eject-symbolic',
+            style_class: 'llama-small-icon',
+        });
+        const unloadBtn = new St.Button({
+            style_class: 'button llama-icon-btn',
+            can_focus: true,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: `${this.gettext('Unload model')}: ${m}`,
+        });
+        unloadBtn.add_child(ejectIcon);
+        unloadBtn.connect('clicked', () => {
+            this._busyModels?.add(m);
+            unloadBtn.reactive = false;
+            unloadBtn.can_focus = false;
+            unloadBtn.opacity = 128;
+            ejectIcon.icon_name = 'process-working-symbolic';
+
+            this._dbusProxy?.UnloadModelRemote(m, this._cancellable, (_result, error) => {
+                if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
+                    return;
+
+                this._busyModels.delete(m);
+                if (error) {
+                    _logError(`Failed to unload model ${m}`, error);
+                    Main.notifyError(this.gettext('Failed to unload model'), error.message);
+                }
+                this._checkLifecycleState();
+            });
+        });
+        row.add_child(unloadBtn);
+
+        const nameLabel = new St.Label({
+            text: m,
+            style_class: 'llama-loaded-model-label',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        row.add_child(nameLabel);
+
+        const chatIcon = new St.Icon({
+            icon_name: 'user-available-symbolic',
+            style_class: 'llama-small-icon',
+        });
+        const chatBtn = new St.Button({
+            style_class: 'button llama-icon-btn',
+            can_focus: true,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: `${this.gettext('Open chat in browser')}: ${m}`,
+        });
+        chatBtn.add_child(chatIcon);
+        chatBtn.connect('clicked', () => {
+            this._indicator.menu.close();
+            this._openChatWindow();
+        });
+        row.add_child(chatBtn);
+
+        return { name: m, row, unloadBtn, ejectIcon, chatBtn };
+    }
+
+    _createAvailableRow(m) {
+        const row = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+            style_class: 'llama-model-item',
+        });
+
+        const playIcon = new St.Icon({
+            icon_name: 'media-playback-start-symbolic',
+            style_class: 'llama-small-icon',
+        });
+        const loadBtn = new St.Button({
+            style_class: 'button llama-icon-btn',
+            can_focus: true,
+            reactive: true,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: `${this.gettext('Load model')}: ${m}`,
+        });
+        loadBtn.add_child(playIcon);
+
+        loadBtn.connect('clicked', () => {
+            this._busyModels?.add(m);
+            loadBtn.reactive = false;
+            loadBtn.can_focus = false;
+            loadBtn.opacity = 128;
+            playIcon.icon_name = 'process-working-symbolic';
+
+            this._dbusProxy?.LoadModelRemote(m, this._cancellable, (_result, error) => {
+                if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
+                    return;
+
+                this._busyModels.delete(m);
+                if (error) {
+                    _logError(`Failed to load model ${m}`, error);
+                    Main.notifyError(this.gettext('Failed to load model'), error.message);
+                }
+                this._checkLifecycleState();
+            });
+        });
+
+        const nameLabel = new St.Label({
+            text: m,
+            style_class: 'llama-available-model-label',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+
+        row.add_child(loadBtn);
+        row.add_child(nameLabel);
+
+        return { name: m, row, loadBtn, playIcon };
+    }
+
     _updateUI(daemonOnline, llamaOnline, availableModels, loadedModels) {
         if (this._cancellable?.is_cancelled() || !this._statusHeaderItem || !this._loadedSection || !this._availableSection)
             return;
@@ -307,202 +538,100 @@ export default class LlamaDbusExtension extends Extension {
         this._statusIcon.style_class = `llama-small-icon llama-status-icon ${labelStyleClass}`;
         this._statusLabel.text = statusText;
 
-        if (this._availableListSection) {
-            this._availableListSection.destroy();
-            this._availableListSection = null;
-        }
-
-        if (this._availableScrollView) {
-            this._availableScrollView.destroy();
-            this._availableScrollView = null;
-        }
-
-        this._loadedSection.removeAll();
-        this._availableSection.removeAll();
-
         const loadedSet = new Set(cleanLoaded);
 
         if (cleanLoaded.length > 0 && daemonOnline) {
             this._loadedSection.box.visible = true;
 
-            const loadedTitleItem = new PopupMenu.PopupBaseMenuItem({
-                reactive: false,
-                can_focus: false,
-            });
-            loadedTitleItem.add_child(new St.Label({
-                text: this.gettext('LOADED MODELS'),
-                style_class: 'llama-section-header',
-            }));
-            this._loadedSection.addMenuItem(loadedTitleItem);
+            for (const [m, item] of this._loadedRows) {
+                if (!loadedSet.has(m)) {
+                    const fallback = this._availableRows.get(m)?.loadBtn ||
+                        this._statusHeaderItem.get_children().find(c => c.can_focus);
+                    this._handleFocusTransfer(item, this._loadedRows, fallback);
+                    item.row.destroy();
+                    this._loadedRows.delete(m);
+                }
+            }
 
-            cleanLoaded.forEach(m => {
+            cleanLoaded.forEach((m, idx) => {
                 const isBusy = this._busyModels?.has(m);
-                const row = new PopupMenu.PopupBaseMenuItem({
-                    reactive: false,
-                    can_focus: false,
-                    style_class: 'llama-model-item',
-                });
-
-                const ejectIcon = new St.Icon({
-                    icon_name: isBusy ? 'process-working-symbolic' : 'media-eject-symbolic',
-                    style_class: 'llama-small-icon',
-                });
-                const unloadBtn = new St.Button({
-                    style_class: 'button llama-icon-btn',
-                    can_focus: !isBusy,
-                    reactive: !isBusy,
-                    y_align: Clutter.ActorAlign.CENTER,
-                    opacity: isBusy ? 128 : 255,
-                    accessible_name: `${this.gettext('Unload model')}: ${m}`,
-                });
-                unloadBtn.add_child(ejectIcon);
-                unloadBtn.connect('clicked', () => {
-                    this._busyModels?.add(m);
-                    unloadBtn.reactive = false;
-                    unloadBtn.can_focus = false;
-                    unloadBtn.opacity = 128;
-                    ejectIcon.icon_name = 'process-working-symbolic';
-
-                    this._dbusProxy?.UnloadModelRemote(m, this._cancellable, (_result, error) => {
-                        if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
-                            return;
-
-                        this._busyModels.delete(m);
-                        if (error) {
-                            _logError(`Failed to unload model ${m}`, error);
-                            Main.notifyError(this.gettext('Failed to unload model'), error.message);
-                        }
-                        this._checkLifecycleState();
-                    });
-                });
-                row.add_child(unloadBtn);
-
-                const nameLabel = new St.Label({
-                    text: m,
-                    style_class: 'llama-loaded-model-label',
-                    x_expand: true,
-                    y_align: Clutter.ActorAlign.CENTER,
-                });
-                nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-                row.add_child(nameLabel);
-
-                const chatIcon = new St.Icon({
-                    icon_name: 'user-available-symbolic',
-                    style_class: 'llama-small-icon',
-                });
-                const chatBtn = new St.Button({
-                    style_class: 'button llama-icon-btn',
-                    can_focus: true,
-                    reactive: true,
-                    y_align: Clutter.ActorAlign.CENTER,
-                    accessible_name: `${this.gettext('Open chat in browser')}: ${m}`,
-                });
-                chatBtn.add_child(chatIcon);
-                chatBtn.connect('clicked', () => {
-                    this._indicator.menu.close();
-                    this._openChatWindow();
-                });
-                row.add_child(chatBtn);
-
-                this._loadedSection.addMenuItem(row);
+                if (this._loadedRows.has(m)) {
+                    const item = this._loadedRows.get(m);
+                    item.unloadBtn.reactive = !isBusy;
+                    item.unloadBtn.can_focus = !isBusy;
+                    item.unloadBtn.opacity = isBusy ? 128 : 255;
+                    item.ejectIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-eject-symbolic';
+                    this._loadedSection.moveMenuItem(item.row, idx + 1);
+                } else {
+                    const item = this._createLoadedRow(m);
+                    item.unloadBtn.reactive = !isBusy;
+                    item.unloadBtn.can_focus = !isBusy;
+                    item.unloadBtn.opacity = isBusy ? 128 : 255;
+                    item.ejectIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-eject-symbolic';
+                    this._loadedSection.addMenuItem(item.row, idx + 1);
+                    this._loadedRows.set(m, item);
+                }
             });
         } else {
             this._loadedSection.box.visible = false;
+            for (const item of this._loadedRows.values())
+                item.row.destroy();
+            this._loadedRows.clear();
         }
 
         if (daemonOnline) {
             this._availableSection.box.visible = true;
 
-            const availableTitleItem = new PopupMenu.PopupBaseMenuItem({
-                reactive: false,
-                can_focus: false,
-            });
-            availableTitleItem.add_child(new St.Label({
-                text: this.gettext('AVAILABLE MODELS'),
-                style_class: 'llama-section-header',
-            }));
-            this._availableSection.addMenuItem(availableTitleItem);
-
             const filteredAvail = cleanAvailable.filter(x => !loadedSet.has(x));
 
             if (filteredAvail.length === 0) {
-                const emptyItem = new PopupMenu.PopupBaseMenuItem({
-                    reactive: false,
-                    can_focus: false,
-                });
-                emptyItem.add_child(new St.Label({
-                    text: this.gettext('No Available Models Found\nVerify llama.cpp paths or check download logs.'),
-                    style_class: 'llama-empty-message',
-                }));
-                this._availableSection.addMenuItem(emptyItem);
+                this._availableEmptyItem.actor.visible = true;
+                this._availableScrollItem.actor.visible = false;
+
+                for (const item of this._availableRows.values())
+                    item.row.destroy();
+                this._availableRows.clear();
             } else {
-                this._availableListSection = new PopupMenu.PopupMenuSection();
-                this._availableScrollView = new St.ScrollView({
-                    style_class: 'llama-available-scroll-view',
-                    hscrollbar_policy: St.PolicyType.NEVER,
-                    vscrollbar_policy: St.PolicyType.AUTOMATIC,
-                });
-                this._availableScrollView.add_child(this._availableListSection.box);
+                this._availableEmptyItem.actor.visible = false;
+                this._availableScrollItem.actor.visible = true;
 
-                filteredAvail.forEach(m => {
+                const availSet = new Set(filteredAvail);
+
+                for (const [m, item] of this._availableRows) {
+                    if (!availSet.has(m)) {
+                        const fallback = this._loadedRows.get(m)?.unloadBtn ||
+                            this._statusHeaderItem.get_children().find(c => c.can_focus);
+                        this._handleFocusTransfer(item, this._availableRows, fallback);
+                        item.row.destroy();
+                        this._availableRows.delete(m);
+                    }
+                }
+
+                filteredAvail.forEach((m, idx) => {
                     const isBusy = this._busyModels?.has(m);
-                    const row = new PopupMenu.PopupBaseMenuItem({
-                        reactive: false,
-                        can_focus: false,
-                        style_class: 'llama-model-item',
-                    });
-
-                    const playIcon = new St.Icon({
-                        icon_name: isBusy ? 'process-working-symbolic' : 'media-playback-start-symbolic',
-                        style_class: 'llama-small-icon',
-                    });
-                    const loadBtn = new St.Button({
-                        style_class: 'button llama-icon-btn',
-                        can_focus: !isBusy,
-                        reactive: !isBusy,
-                        y_align: Clutter.ActorAlign.CENTER,
-                        opacity: isBusy ? 128 : 255,
-                        accessible_name: `${this.gettext('Load model')}: ${m}`,
-                    });
-                    loadBtn.add_child(playIcon);
-
-                    loadBtn.connect('clicked', () => {
-                        this._busyModels?.add(m);
-                        loadBtn.reactive = false;
-                        loadBtn.can_focus = false;
-                        loadBtn.opacity = 128;
-                        playIcon.icon_name = 'process-working-symbolic';
-
-                        this._dbusProxy?.LoadModelRemote(m, this._cancellable, (_result, error) => {
-                            if (this._cancellable?.is_cancelled() || !this._dbusProxy || !this._busyModels)
-                                return;
-
-                            this._busyModels.delete(m);
-                            if (error) {
-                                _logError(`Failed to load model ${m}`, error);
-                                Main.notifyError(this.gettext('Failed to load model'), error.message);
-                            }
-                            this._checkLifecycleState();
-                        });
-                    });
-
-                    const nameLabel = new St.Label({
-                        text: m,
-                        style_class: 'llama-available-model-label',
-                        x_expand: true,
-                        y_align: Clutter.ActorAlign.CENTER,
-                    });
-                    nameLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-
-                    row.add_child(loadBtn);
-                    row.add_child(nameLabel);
-                    this._availableListSection.addMenuItem(row);
+                    if (this._availableRows.has(m)) {
+                        const item = this._availableRows.get(m);
+                        item.loadBtn.reactive = !isBusy;
+                        item.loadBtn.can_focus = !isBusy;
+                        item.loadBtn.opacity = isBusy ? 128 : 255;
+                        item.playIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-playback-start-symbolic';
+                        this._availableListSection.moveMenuItem(item.row, idx);
+                    } else {
+                        const item = this._createAvailableRow(m);
+                        item.loadBtn.reactive = !isBusy;
+                        item.loadBtn.can_focus = !isBusy;
+                        item.loadBtn.opacity = isBusy ? 128 : 255;
+                        item.playIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-playback-start-symbolic';
+                        this._availableListSection.addMenuItem(item.row, idx);
+                        this._availableRows.set(m, item);
+                    }
                 });
-
-                this._availableSection.box.add_child(this._availableScrollView);
             }
         } else {
             this._availableSection.box.visible = false;
+            for (const item of this._availableRows.values())
+                item.row.destroy();
+            this._availableRows.clear();
         }
     }
 
