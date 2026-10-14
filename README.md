@@ -10,6 +10,14 @@ A GNOME Shell extension providing a top bar system indicator to monitor, load, a
 
 ---
 
+## Screenshots
+
+| Dropdown Menu | Preferences |
+| :---: | :---: |
+| ![Menu](.github/assets/extension.png) | ![Preferences](.github/assets/preferences.png) |
+
+---
+
 ## Table of Contents
 
 - [Overview](#overview)
