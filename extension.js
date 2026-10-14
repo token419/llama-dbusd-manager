@@ -52,7 +52,7 @@ export default class LlamaDbusExtension extends Extension {
 
         this._indicator.menu.box.add_style_class_name('llama-menu-layout');
 
-        this._statusHeaderItem = new PopupMenu.PopupBaseMenuItem({
+        const statusHeaderItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
             can_focus: false,
             style_class: 'llama-model-item llama-status-header',
@@ -62,14 +62,14 @@ export default class LlamaDbusExtension extends Extension {
             style_class: 'llama-small-icon llama-status-icon',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._statusHeaderItem.add_child(this._statusIcon);
+        statusHeaderItem.add_child(this._statusIcon);
 
         this._statusLabel = new St.Label({
             style_class: 'llama-menu-title',
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._statusHeaderItem.add_child(this._statusLabel);
+        statusHeaderItem.add_child(this._statusLabel);
 
         const cogIcon = new St.Icon({
             icon_name: 'emblem-system-symbolic',
@@ -87,35 +87,35 @@ export default class LlamaDbusExtension extends Extension {
             this._indicator.menu.close();
             this.openPreferences();
         });
-        this._statusHeaderItem.add_child(settingsBtn);
+        statusHeaderItem.add_child(settingsBtn);
 
-        this._indicator.menu.addMenuItem(this._statusHeaderItem);
+        this._indicator.menu.addMenuItem(statusHeaderItem);
 
         this._loadedSection = new PopupMenu.PopupMenuSection();
         this._indicator.menu.addMenuItem(this._loadedSection);
 
-        this._loadedTitleItem = new PopupMenu.PopupBaseMenuItem({
+        const loadedTitleItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
             can_focus: false,
         });
-        this._loadedTitleItem.add_child(new St.Label({
+        loadedTitleItem.add_child(new St.Label({
             text: this.gettext('LOADED MODELS'),
             style_class: 'llama-section-header',
         }));
-        this._loadedSection.addMenuItem(this._loadedTitleItem);
+        this._loadedSection.addMenuItem(loadedTitleItem);
 
         this._availableSection = new PopupMenu.PopupMenuSection();
         this._indicator.menu.addMenuItem(this._availableSection);
 
-        this._availableTitleItem = new PopupMenu.PopupBaseMenuItem({
+        const availableTitleItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
             can_focus: false,
         });
-        this._availableTitleItem.add_child(new St.Label({
+        availableTitleItem.add_child(new St.Label({
             text: this.gettext('AVAILABLE MODELS'),
             style_class: 'llama-section-header',
         }));
-        this._availableSection.addMenuItem(this._availableTitleItem);
+        this._availableSection.addMenuItem(availableTitleItem);
 
         this._availableEmptyItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
@@ -127,21 +127,24 @@ export default class LlamaDbusExtension extends Extension {
         }));
         this._availableSection.addMenuItem(this._availableEmptyItem);
 
-        this._availableListSection = new PopupMenu.PopupMenuSection();
-        this._availableListSection._setParent(this._availableSection);
-        this._availableScrollView = new St.ScrollView({
+        this._availableBox = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+        });
+
+        const availableScrollView = new St.ScrollView({
             style_class: 'llama-available-scroll-view',
             hscrollbar_policy: St.PolicyType.NEVER,
             vscrollbar_policy: St.PolicyType.AUTOMATIC,
         });
-        this._availableScrollView.add_child(this._availableListSection.box);
+        availableScrollView.add_child(this._availableBox);
 
         this._availableScrollItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
             can_focus: false,
             style_class: 'llama-scroll-menu-item',
         });
-        this._availableScrollItem.add_child(this._availableScrollView);
+        this._availableScrollItem.add_child(availableScrollView);
         this._availableSection.addMenuItem(this._availableScrollItem);
 
         this._loadedRows = new Map();
@@ -200,14 +203,9 @@ export default class LlamaDbusExtension extends Extension {
             this._loadedRows = null;
         }
 
-        if (this._availableListSection) {
-            this._availableListSection.destroy();
-            this._availableListSection = null;
-        }
-
-        if (this._availableScrollView) {
-            this._availableScrollView.destroy();
-            this._availableScrollView = null;
+        if (this._availableBox) {
+            this._availableBox.destroy();
+            this._availableBox = null;
         }
 
         if (this._availableScrollItem) {
@@ -220,19 +218,9 @@ export default class LlamaDbusExtension extends Extension {
             this._availableEmptyItem = null;
         }
 
-        if (this._availableTitleItem) {
-            this._availableTitleItem.destroy();
-            this._availableTitleItem = null;
-        }
-
         if (this._availableSection) {
             this._availableSection.destroy();
             this._availableSection = null;
-        }
-
-        if (this._loadedTitleItem) {
-            this._loadedTitleItem.destroy();
-            this._loadedTitleItem = null;
         }
 
         if (this._loadedSection) {
@@ -248,11 +236,6 @@ export default class LlamaDbusExtension extends Extension {
         if (this._statusLabel) {
             this._statusLabel.destroy();
             this._statusLabel = null;
-        }
-
-        if (this._statusHeaderItem) {
-            this._statusHeaderItem.destroy();
-            this._statusHeaderItem = null;
         }
 
         if (this._indicator) {
@@ -288,6 +271,8 @@ export default class LlamaDbusExtension extends Extension {
                     if (!this._busyModels)
                         return;
 
+                    // makeProxyWrapper hardcodes -1 (default timeout) for all wrapper methods.
+                    // Because LoadModel can take >60s for large LLM weights, proxy default is extended.
                     proxy.set_default_timeout(120000);
 
                     this._nameOwnerId = proxy.connect(
@@ -420,7 +405,7 @@ export default class LlamaDbusExtension extends Extension {
                     return;
 
                 this._busyModels.delete(m);
-                if (error) {
+                if (error && !error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
                     _logError(`Failed to unload model ${m}`, error);
                     Main.notifyError(this.gettext('Failed to unload model'), error.message);
                 }
@@ -491,7 +476,7 @@ export default class LlamaDbusExtension extends Extension {
                     return;
 
                 this._busyModels.delete(m);
-                if (error) {
+                if (error && !error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
                     _logError(`Failed to load model ${m}`, error);
                     Main.notifyError(this.gettext('Failed to load model'), error.message);
                 }
@@ -514,7 +499,7 @@ export default class LlamaDbusExtension extends Extension {
     }
 
     _updateUI(daemonOnline, llamaOnline, availableModels, loadedModels) {
-        if (this._cancellable?.is_cancelled() || !this._statusHeaderItem || !this._loadedSection || !this._availableSection)
+        if (this._cancellable?.is_cancelled() || !this._indicator || !this._loadedSection || !this._availableSection)
             return;
 
         const cleanLoaded = (Array.isArray(loadedModels) ? loadedModels : [])
@@ -547,8 +532,7 @@ export default class LlamaDbusExtension extends Extension {
 
             for (const [m, item] of this._loadedRows) {
                 if (!loadedSet.has(m)) {
-                    const fallback = this._availableRows.get(m)?.loadBtn ||
-                        this._statusHeaderItem.get_children().find(c => c.can_focus);
+                    const fallback = this._availableRows.get(m)?.loadBtn || this._indicator;
                     this._handleFocusTransfer(item, this._loadedRows, fallback);
                     item.row.destroy();
                     this._loadedRows.delete(m);
@@ -587,22 +571,21 @@ export default class LlamaDbusExtension extends Extension {
             const filteredAvail = cleanAvailable.filter(x => !loadedSet.has(x));
 
             if (filteredAvail.length === 0) {
-                this._availableEmptyItem.actor.visible = true;
-                this._availableScrollItem.actor.visible = false;
+                this._availableEmptyItem.visible = true;
+                this._availableScrollItem.visible = false;
 
                 for (const item of this._availableRows.values())
                     item.row.destroy();
                 this._availableRows.clear();
             } else {
-                this._availableEmptyItem.actor.visible = false;
-                this._availableScrollItem.actor.visible = true;
+                this._availableEmptyItem.visible = false;
+                this._availableScrollItem.visible = true;
 
                 const availSet = new Set(filteredAvail);
 
                 for (const [m, item] of this._availableRows) {
                     if (!availSet.has(m)) {
-                        const fallback = this._loadedRows.get(m)?.unloadBtn ||
-                            this._statusHeaderItem.get_children().find(c => c.can_focus);
+                        const fallback = this._loadedRows.get(m)?.unloadBtn || this._indicator;
                         this._handleFocusTransfer(item, this._availableRows, fallback);
                         item.row.destroy();
                         this._availableRows.delete(m);
@@ -617,14 +600,14 @@ export default class LlamaDbusExtension extends Extension {
                         item.loadBtn.can_focus = !isBusy;
                         item.loadBtn.opacity = isBusy ? 128 : 255;
                         item.playIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-playback-start-symbolic';
-                        this._availableListSection.moveMenuItem(item.row, idx);
+                        this._availableBox.set_child_at_index(item.row, idx);
                     } else {
                         const item = this._createAvailableRow(m);
                         item.loadBtn.reactive = !isBusy;
                         item.loadBtn.can_focus = !isBusy;
                         item.loadBtn.opacity = isBusy ? 128 : 255;
                         item.playIcon.icon_name = isBusy ? 'process-working-symbolic' : 'media-playback-start-symbolic';
-                        this._availableListSection.addMenuItem(item.row, idx);
+                        this._availableBox.insert_child_at_index(item.row, idx);
                         this._availableRows.set(m, item);
                     }
                 });
