@@ -8,6 +8,7 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc/animationUtils.js';
 
 const LlamaDbusInterface = `
 <node>
@@ -86,6 +87,59 @@ export default class LlamaDbusExtension extends Extension {
         settingsBtn.connect('clicked', () => {
             this._indicator.menu.close();
             this.openPreferences();
+        });
+        settingsBtn.connect('key-focus-in', () => {
+            const scrollView = this._availableBox?.get_parent();
+            if (scrollView?.vadjustment)
+                scrollView.vadjustment.set_value(0);
+        });
+        settingsBtn.connect('key-press-event', (_actor, event) => {
+            const symbol = event.get_key_symbol();
+            const state = event.get_state();
+            const isShift = Boolean(state & Clutter.ModifierType.SHIFT_MASK);
+
+            const isBackward = symbol === Clutter.KEY_ISO_Left_Tab ||
+                symbol === Clutter.KEY_Up ||
+                (symbol === Clutter.KEY_Tab && isShift);
+
+            const isForward = (symbol === Clutter.KEY_Tab && !isShift) ||
+                symbol === Clutter.KEY_Down;
+
+            if (isBackward) {
+                if (this._availableRows?.size > 0) {
+                    const rows = Array.from(this._availableRows.values());
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow?.loadBtn && lastRow.loadBtn.can_focus) {
+                        lastRow.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                } else if (this._loadedRows?.size > 0) {
+                    const rows = Array.from(this._loadedRows.values());
+                    const lastRow = rows[rows.length - 1];
+                    const target = lastRow?.chatBtn || lastRow?.unloadBtn;
+                    if (target && target.can_focus) {
+                        target.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                }
+            } else if (isForward) {
+                if (this._loadedRows?.size > 0) {
+                    const firstLoaded = this._loadedRows.values().next().value;
+                    const target = firstLoaded?.unloadBtn || firstLoaded?.chatBtn;
+                    if (target && target.can_focus) {
+                        target.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                } else if (this._availableRows?.size > 0) {
+                    const firstRow = this._availableRows.values().next().value;
+                    if (firstRow?.loadBtn && firstRow.loadBtn.can_focus) {
+                        firstRow.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                }
+            }
+
+            return Clutter.EVENT_PROPAGATE;
         });
         statusHeaderItem.add_child(settingsBtn);
 
@@ -415,6 +469,21 @@ export default class LlamaDbusExtension extends Extension {
                 this._checkLifecycleState();
             });
         });
+        unloadBtn.connect('key-press-event', (_actor, event) => {
+            const symbol = event.get_key_symbol();
+            const state = event.get_state();
+            const isShift = Boolean(state & Clutter.ModifierType.SHIFT_MASK);
+
+            const isFirst = this._loadedRows?.values().next().value?.name === m;
+            if (isFirst && (symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab || (symbol === Clutter.KEY_Tab && isShift))) {
+                const settingsBtn = this._getSettingsButton();
+                if (settingsBtn && settingsBtn.can_focus) {
+                    settingsBtn.grab_key_focus();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
         row.add_child(unloadBtn);
 
         const nameLabel = new St.Label({
@@ -442,9 +511,45 @@ export default class LlamaDbusExtension extends Extension {
             this._indicator.menu.close();
             this._openChatWindow();
         });
+        chatBtn.connect('key-press-event', (_actor, event) => {
+            const symbol = event.get_key_symbol();
+            const state = event.get_state();
+            const isShift = Boolean(state & Clutter.ModifierType.SHIFT_MASK);
+
+            let isLast = false;
+            if (this._loadedRows?.size > 0) {
+                const rows = Array.from(this._loadedRows.values());
+                isLast = rows[rows.length - 1]?.name === m;
+            }
+
+            if (isLast && ((symbol === Clutter.KEY_Tab && !isShift) || symbol === Clutter.KEY_Down)) {
+                if (this._availableRows?.size > 0) {
+                    const firstAvail = this._availableRows.values().next().value;
+                    if (firstAvail?.loadBtn && firstAvail.loadBtn.can_focus) {
+                        firstAvail.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                }
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
         row.add_child(chatBtn);
 
         return { name: m, row, unloadBtn, ejectIcon, chatBtn };
+    }
+
+    _getSettingsButton() {
+        return this._statusIcon?.get_parent()?.get_children()?.find(c => c.can_focus);
+    }
+
+    _ensureRowVisible(row) {
+        try {
+            const scrollView = this._availableBox?.get_parent();
+            if (scrollView && row && row.get_parent())
+                ensureActorVisibleInScrollView(scrollView, row);
+        } catch {
+            // Non-critical if layout pass has not completed yet
+        }
     }
 
     _createAvailableRow(m) {
@@ -466,6 +571,50 @@ export default class LlamaDbusExtension extends Extension {
             accessible_name: `${this.gettext('Load model')}: ${m}`,
         });
         loadBtn.add_child(playIcon);
+
+        loadBtn.connect('key-focus-in', () => {
+            this._ensureRowVisible(row);
+        });
+
+        loadBtn.connect('key-press-event', (_actor, event) => {
+            const symbol = event.get_key_symbol();
+            const state = event.get_state();
+            const isShift = Boolean(state & Clutter.ModifierType.SHIFT_MASK);
+
+            const isFirst = this._availableRows?.values().next().value?.name === m;
+            let isLast = false;
+            if (this._availableRows?.size > 0) {
+                const rows = Array.from(this._availableRows.values());
+                isLast = rows[rows.length - 1]?.name === m;
+            }
+
+            if (isLast && ((symbol === Clutter.KEY_Tab && !isShift) || symbol === Clutter.KEY_Down)) {
+                const settingsBtn = this._getSettingsButton();
+                if (settingsBtn && settingsBtn.can_focus) {
+                    settingsBtn.grab_key_focus();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+
+            if (isFirst && (symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab || (symbol === Clutter.KEY_Tab && isShift))) {
+                if (this._loadedRows?.size > 0) {
+                    const rows = Array.from(this._loadedRows.values());
+                    const lastLoaded = rows[rows.length - 1];
+                    const target = lastLoaded?.chatBtn || lastLoaded?.unloadBtn;
+                    if (target && target.can_focus) {
+                        target.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                }
+                const settingsBtn = this._getSettingsButton();
+                if (settingsBtn && settingsBtn.can_focus) {
+                    settingsBtn.grab_key_focus();
+                    return Clutter.EVENT_STOP;
+                }
+            }
+
+            return Clutter.EVENT_PROPAGATE;
+        });
 
         loadBtn.connect('clicked', () => {
             this._busyModels?.add(m);
