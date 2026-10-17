@@ -39,11 +39,6 @@ jobs:
       - name: Validate JavaScript syntax
         run: |
           node --check extension.js
-          node --check prefs.js
-
-      - name: Validate GSettings XML Schema
-        run: |
-          glib-compile-schemas --strict --dry-run schemas/
 
       - name: Validate Metadata JSON
         run: |

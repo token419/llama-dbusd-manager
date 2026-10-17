@@ -13,6 +13,7 @@ import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc
 const LlamaDbusInterface = `
 <node>
   <interface name="com.github.token419.LlamaDbusd">
+    <property name="ServerUrl" type="s" access="read"/>
     <property name="IsOnline" type="b" access="read"/>
     <property name="AvailableModels" type="as" access="read"/>
     <property name="LoadedModels" type="as" access="read"/>
@@ -38,7 +39,6 @@ function _logError(msg, err = null) {
 export default class LlamaDbusExtension extends Extension {
     enable() {
         this._cancellable = new Gio.Cancellable();
-        this._settings = this.getSettings();
         this._indicator = new PanelMenu.Button(0.5, this.metadata.name, false);
 
         const iconFile = this.dir.get_child('icons').get_child('llama-ai-symbolic.svg');
@@ -71,77 +71,6 @@ export default class LlamaDbusExtension extends Extension {
             y_align: Clutter.ActorAlign.CENTER,
         });
         statusHeaderItem.add_child(this._statusLabel);
-
-        const cogIcon = new St.Icon({
-            icon_name: 'emblem-system-symbolic',
-            style_class: 'llama-small-icon',
-        });
-        const settingsBtn = new St.Button({
-            style_class: 'button llama-icon-btn',
-            can_focus: true,
-            reactive: true,
-            y_align: Clutter.ActorAlign.CENTER,
-            accessible_name: this.gettext('Preferences'),
-        });
-        settingsBtn.add_child(cogIcon);
-        settingsBtn.connect('clicked', () => {
-            this._indicator.menu.close();
-            this.openPreferences();
-        });
-        settingsBtn.connect('key-focus-in', () => {
-            const scrollView = this._availableBox?.get_parent();
-            if (scrollView?.vadjustment)
-                scrollView.vadjustment.set_value(0);
-        });
-        settingsBtn.connect('key-press-event', (_actor, event) => {
-            const symbol = event.get_key_symbol();
-            const state = event.get_state();
-            const isShift = Boolean(state & Clutter.ModifierType.SHIFT_MASK);
-
-            const isBackward = symbol === Clutter.KEY_ISO_Left_Tab ||
-                symbol === Clutter.KEY_Up ||
-                (symbol === Clutter.KEY_Tab && isShift);
-
-            const isForward = (symbol === Clutter.KEY_Tab && !isShift) ||
-                symbol === Clutter.KEY_Down;
-
-            if (isBackward) {
-                if (this._availableRows?.size > 0) {
-                    const rows = Array.from(this._availableRows.values());
-                    const lastRow = rows[rows.length - 1];
-                    if (lastRow?.loadBtn && lastRow.loadBtn.can_focus) {
-                        lastRow.loadBtn.grab_key_focus();
-                        return Clutter.EVENT_STOP;
-                    }
-                } else if (this._loadedRows?.size > 0) {
-                    const rows = Array.from(this._loadedRows.values());
-                    const lastRow = rows[rows.length - 1];
-                    const target = lastRow?.chatBtn || lastRow?.unloadBtn;
-                    if (target && target.can_focus) {
-                        target.grab_key_focus();
-                        return Clutter.EVENT_STOP;
-                    }
-                }
-            } else if (isForward) {
-                if (this._loadedRows?.size > 0) {
-                    const firstLoaded = this._loadedRows.values().next().value;
-                    const target = firstLoaded?.unloadBtn || firstLoaded?.chatBtn;
-                    if (target && target.can_focus) {
-                        target.grab_key_focus();
-                        return Clutter.EVENT_STOP;
-                    }
-                } else if (this._availableRows?.size > 0) {
-                    const firstRow = this._availableRows.values().next().value;
-                    if (firstRow?.loadBtn && firstRow.loadBtn.can_focus) {
-                        firstRow.loadBtn.grab_key_focus();
-                        return Clutter.EVENT_STOP;
-                    }
-                }
-            }
-
-            return Clutter.EVENT_PROPAGATE;
-        });
-        statusHeaderItem.add_child(settingsBtn);
 
         this._indicator.menu.addMenuItem(statusHeaderItem);
 
@@ -194,13 +123,20 @@ export default class LlamaDbusExtension extends Extension {
             hscrollbar_policy: St.PolicyType.NEVER,
             vscrollbar_policy: St.PolicyType.AUTOMATIC,
         });
-        availableScrollView.add_child(this._availableBox);
+
+        if (typeof availableScrollView.add_actor === 'function')
+            availableScrollView.add_actor(this._availableBox);
+        else if (typeof availableScrollView.set_child === 'function')
+            availableScrollView.set_child(this._availableBox);
+        else
+            availableScrollView.add_child(this._availableBox);
 
         this._availableScrollItem = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
             can_focus: false,
             style_class: 'llama-scroll-menu-item',
         });
+        this._availableScrollItem.visible = false;
         this._availableScrollItem.add_child(availableScrollView);
         this._availableSection.addMenuItem(this._availableScrollItem);
 
@@ -248,59 +184,57 @@ export default class LlamaDbusExtension extends Extension {
 
         if (this._availableRows) {
             for (const item of this._availableRows.values())
-                item.row.destroy();
+                this._destroyRowItem(item);
             this._availableRows.clear();
             this._availableRows = null;
         }
 
         if (this._loadedRows) {
             for (const item of this._loadedRows.values())
-                item.row.destroy();
+                this._destroyRowItem(item);
             this._loadedRows.clear();
             this._loadedRows = null;
         }
 
         if (this._availableBox) {
-            this._availableBox.destroy();
+            this._safeDestroyActor(this._availableBox);
             this._availableBox = null;
         }
 
         if (this._availableScrollItem) {
-            this._availableScrollItem.destroy();
+            this._safeDestroyActor(this._availableScrollItem);
             this._availableScrollItem = null;
         }
 
         if (this._availableEmptyItem) {
-            this._availableEmptyItem.destroy();
+            this._safeDestroyActor(this._availableEmptyItem);
             this._availableEmptyItem = null;
         }
 
         if (this._availableSection) {
-            this._availableSection.destroy();
+            this._safeDestroyActor(this._availableSection);
             this._availableSection = null;
         }
 
         if (this._loadedSection) {
-            this._loadedSection.destroy();
+            this._safeDestroyActor(this._loadedSection);
             this._loadedSection = null;
         }
 
         if (this._statusIcon) {
-            this._statusIcon.destroy();
+            this._safeDestroyActor(this._statusIcon);
             this._statusIcon = null;
         }
 
         if (this._statusLabel) {
-            this._statusLabel.destroy();
+            this._safeDestroyActor(this._statusLabel);
             this._statusLabel = null;
         }
 
         if (this._indicator) {
-            this._indicator.destroy();
+            this._safeDestroyActor(this._indicator);
             this._indicator = null;
         }
-
-        this._settings = null;
 
         if (this._busyModels) {
             this._busyModels.clear();
@@ -431,6 +365,75 @@ export default class LlamaDbusExtension extends Extension {
             fallbackActor.grab_key_focus();
     }
 
+    _safeDestroyActor(actor) {
+        if (!actor)
+            return;
+
+        try {
+            if (typeof actor.get_children === 'function') {
+                const children = actor.get_children();
+                for (const child of children) {
+                    this._safeDestroyActor(child);
+                }
+            }
+        } catch {
+            // Child detachment fallback
+        }
+
+        try {
+            const parent = typeof actor.get_parent === 'function' ? actor.get_parent() : null;
+            if (parent) {
+                if (typeof parent.set_child === 'function' && parent.get_child?.() === actor)
+                    parent.set_child(null);
+                else if (typeof parent.remove_child === 'function')
+                    parent.remove_child(actor);
+                else if (typeof parent.remove_actor === 'function')
+                    parent.remove_actor(actor);
+            }
+        } catch {
+            // Parent removal fallback
+        }
+
+        try {
+            if (typeof actor.destroy === 'function')
+                actor.destroy();
+        } catch {
+            // Destruction fallback
+        }
+    }
+
+    _destroyRowItem(item) {
+        if (!item)
+            return;
+
+        if (item.playIcon) {
+            this._safeDestroyActor(item.playIcon);
+            item.playIcon = null;
+        }
+        if (item.ejectIcon) {
+            this._safeDestroyActor(item.ejectIcon);
+            item.ejectIcon = null;
+        }
+        if (item.chatBtn) {
+            this._safeDestroyActor(item.chatBtn);
+            item.chatBtn = null;
+        }
+        if (item.loadBtn) {
+            this._safeDestroyActor(item.loadBtn);
+            item.loadBtn = null;
+        }
+        if (item.unloadBtn) {
+            this._safeDestroyActor(item.unloadBtn);
+            item.unloadBtn = null;
+        }
+        if (item.row) {
+            this._safeDestroyActor(item.row);
+            item.row = null;
+        } else if (typeof item.destroy === 'function') {
+            this._safeDestroyActor(item);
+        }
+    }
+
     _createLoadedRow(m) {
         const row = new PopupMenu.PopupBaseMenuItem({
             reactive: false,
@@ -440,7 +443,9 @@ export default class LlamaDbusExtension extends Extension {
 
         const ejectIcon = new St.Icon({
             icon_name: 'media-eject-symbolic',
+            fallback_icon_name: 'media-playback-stop-symbolic',
             style_class: 'llama-small-icon',
+            icon_size: 16,
         });
         const unloadBtn = new St.Button({
             style_class: 'button llama-icon-btn',
@@ -448,8 +453,10 @@ export default class LlamaDbusExtension extends Extension {
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
             accessible_name: `${this.gettext('Unload model')}: ${m}`,
+            child: ejectIcon,
         });
-        unloadBtn.add_child(ejectIcon);
+        if (typeof unloadBtn.set_child === 'function')
+            unloadBtn.set_child(ejectIcon);
         unloadBtn.connect('clicked', () => {
             this._busyModels?.add(m);
             unloadBtn.reactive = false;
@@ -476,10 +483,13 @@ export default class LlamaDbusExtension extends Extension {
 
             const isFirst = this._loadedRows?.values().next().value?.name === m;
             if (isFirst && (symbol === Clutter.KEY_Up || symbol === Clutter.KEY_ISO_Left_Tab || (symbol === Clutter.KEY_Tab && isShift))) {
-                const settingsBtn = this._getSettingsButton();
-                if (settingsBtn && settingsBtn.can_focus) {
-                    settingsBtn.grab_key_focus();
-                    return Clutter.EVENT_STOP;
+                if (this._availableRows?.size > 0) {
+                    const rows = Array.from(this._availableRows.values());
+                    const lastRow = rows[rows.length - 1];
+                    if (lastRow?.loadBtn && lastRow.loadBtn.can_focus) {
+                        lastRow.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
                 }
             }
             return Clutter.EVENT_PROPAGATE;
@@ -498,6 +508,7 @@ export default class LlamaDbusExtension extends Extension {
         const chatIcon = new St.Icon({
             icon_name: 'user-available-symbolic',
             style_class: 'llama-small-icon',
+            icon_size: 16,
         });
         const chatBtn = new St.Button({
             style_class: 'button llama-icon-btn',
@@ -505,8 +516,10 @@ export default class LlamaDbusExtension extends Extension {
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
             accessible_name: `${this.gettext('Open chat in browser')}: ${m}`,
+            child: chatIcon,
         });
-        chatBtn.add_child(chatIcon);
+        if (typeof chatBtn.set_child === 'function')
+            chatBtn.set_child(chatIcon);
         chatBtn.connect('clicked', () => {
             this._indicator.menu.close();
             this._openChatWindow();
@@ -538,10 +551,6 @@ export default class LlamaDbusExtension extends Extension {
         return { name: m, row, unloadBtn, ejectIcon, chatBtn };
     }
 
-    _getSettingsButton() {
-        return this._statusIcon?.get_parent()?.get_children()?.find(c => c.can_focus);
-    }
-
     _ensureRowVisible(row) {
         try {
             const scrollView = this._availableBox?.get_parent();
@@ -562,6 +571,7 @@ export default class LlamaDbusExtension extends Extension {
         const playIcon = new St.Icon({
             icon_name: 'media-playback-start-symbolic',
             style_class: 'llama-small-icon',
+            icon_size: 16,
         });
         const loadBtn = new St.Button({
             style_class: 'button llama-icon-btn',
@@ -569,8 +579,10 @@ export default class LlamaDbusExtension extends Extension {
             reactive: true,
             y_align: Clutter.ActorAlign.CENTER,
             accessible_name: `${this.gettext('Load model')}: ${m}`,
+            child: playIcon,
         });
-        loadBtn.add_child(playIcon);
+        if (typeof loadBtn.set_child === 'function')
+            loadBtn.set_child(playIcon);
 
         loadBtn.connect('key-focus-in', () => {
             this._ensureRowVisible(row);
@@ -589,10 +601,19 @@ export default class LlamaDbusExtension extends Extension {
             }
 
             if (isLast && ((symbol === Clutter.KEY_Tab && !isShift) || symbol === Clutter.KEY_Down)) {
-                const settingsBtn = this._getSettingsButton();
-                if (settingsBtn && settingsBtn.can_focus) {
-                    settingsBtn.grab_key_focus();
-                    return Clutter.EVENT_STOP;
+                if (this._loadedRows?.size > 0) {
+                    const firstLoaded = this._loadedRows.values().next().value;
+                    const target = firstLoaded?.unloadBtn || firstLoaded?.chatBtn;
+                    if (target && target.can_focus) {
+                        target.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
+                } else if (this._availableRows?.size > 0) {
+                    const firstAvail = this._availableRows.values().next().value;
+                    if (firstAvail?.loadBtn && firstAvail.loadBtn.can_focus) {
+                        firstAvail.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
                 }
             }
 
@@ -605,11 +626,13 @@ export default class LlamaDbusExtension extends Extension {
                         target.grab_key_focus();
                         return Clutter.EVENT_STOP;
                     }
-                }
-                const settingsBtn = this._getSettingsButton();
-                if (settingsBtn && settingsBtn.can_focus) {
-                    settingsBtn.grab_key_focus();
-                    return Clutter.EVENT_STOP;
+                } else if (this._availableRows?.size > 0) {
+                    const rows = Array.from(this._availableRows.values());
+                    const lastAvail = rows[rows.length - 1];
+                    if (lastAvail?.loadBtn && lastAvail.loadBtn.can_focus) {
+                        lastAvail.loadBtn.grab_key_focus();
+                        return Clutter.EVENT_STOP;
+                    }
                 }
             }
 
@@ -686,7 +709,7 @@ export default class LlamaDbusExtension extends Extension {
                 if (!loadedSet.has(m)) {
                     const fallback = this._availableRows.get(m)?.loadBtn || this._indicator;
                     this._handleFocusTransfer(item, this._loadedRows, fallback);
-                    item.row.destroy();
+                    this._destroyRowItem(item);
                     this._loadedRows.delete(m);
                 }
             }
@@ -713,7 +736,7 @@ export default class LlamaDbusExtension extends Extension {
         } else {
             this._loadedSection.box.visible = false;
             for (const item of this._loadedRows.values())
-                item.row.destroy();
+                this._destroyRowItem(item);
             this._loadedRows.clear();
         }
 
@@ -727,7 +750,7 @@ export default class LlamaDbusExtension extends Extension {
                 this._availableScrollItem.visible = false;
 
                 for (const item of this._availableRows.values())
-                    item.row.destroy();
+                    this._destroyRowItem(item);
                 this._availableRows.clear();
             } else {
                 this._availableEmptyItem.visible = false;
@@ -739,7 +762,7 @@ export default class LlamaDbusExtension extends Extension {
                     if (!availSet.has(m)) {
                         const fallback = this._loadedRows.get(m)?.unloadBtn || this._indicator;
                         this._handleFocusTransfer(item, this._availableRows, fallback);
-                        item.row.destroy();
+                        this._destroyRowItem(item);
                         this._availableRows.delete(m);
                     }
                 }
@@ -767,22 +790,14 @@ export default class LlamaDbusExtension extends Extension {
         } else {
             this._availableSection.box.visible = false;
             for (const item of this._availableRows.values())
-                item.row.destroy();
+                this._destroyRowItem(item);
             this._availableRows.clear();
         }
     }
 
     _openChatWindow() {
-        if (!this._settings)
-            return;
-
-        const rawUrl = this._settings.get_string('server-url');
-        if (!rawUrl)
-            return;
-
-        let targetUrl = rawUrl.trim();
-        if (!targetUrl)
-            return;
+        const rawUrl = this._dbusProxy?.ServerUrl;
+        let targetUrl = (typeof rawUrl === 'string' && rawUrl.trim()) ? rawUrl.trim() : 'http://127.0.0.1:8080';
 
         const lowerUrl = targetUrl.toLowerCase();
         if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://'))

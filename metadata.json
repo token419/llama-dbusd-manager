@@ -4,7 +4,6 @@
   "url": "https://github.com/token419/llama-dbusd-manager",
   "uuid": "llama-dbusd-manager@token419.github.com",
   "gettext-domain": "llama-dbusd-manager",
-  "settings-schema": "org.gnome.shell.extensions.llama-dbusd-manager",
   "shell-version": [
     "45",
     "46",
@@ -14,5 +13,5 @@
     "50",
     "51"
   ],
-  "version": 2
+  "version": 3
 }

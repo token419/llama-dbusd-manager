@@ -34,6 +34,8 @@
 }
 
 .llama-available-scroll-view {
+    min-width: 0;
+    min-height: 0;
     max-height: 320px;
 }
 
@@ -71,6 +73,7 @@
 }
 
 /* Enforce the small scale on our media elements */
+.llama-small-icon,
 .llama-menu-layout .llama-small-icon {
-    icon-size: 14px;
+    icon-size: 16px;
 }

@@ -11,10 +11,6 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: extension.js:76
-msgid "Preferences"
-msgstr ""
-
 #: extension.js:269
 msgid "D-Bus Server Offline"
 msgstr ""
@@ -61,27 +57,3 @@ msgstr ""
 msgid "Failed to load model"
 msgstr ""
 
-#: prefs.js:8
-msgid "General"
-msgstr ""
-
-#: prefs.js:14
-msgid "Connection Configuration"
-msgstr ""
-
-#: prefs.js:15
-msgid ""
-"Configure how the desktop extension communicates with your local environment."
-msgstr ""
-
-#: prefs.js:20
-msgid "Llama Server URL"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.llama-dbusd-manager.gschema.xml:6
-msgid "Llama.cpp Server URL"
-msgstr ""
-
-#: schemas/org.gnome.shell.extensions.llama-dbusd-manager.gschema.xml:7
-msgid "The web address that opens when the Open Chat button is clicked."
-msgstr ""
